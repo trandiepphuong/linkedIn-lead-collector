@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        width: 280px;
+        font-family: Arial, sans-serif;
+        padding: 12px;
+      }
+
+      button {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 8px;
+        cursor: pointer;
+      }
+
+      #status {
+        font-size: 13px;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h3>LinkedIn Collector</h3>
+
+    <button id="collect">Collect current page</button>
+    <button id="export">Export CSV</button>
+    <button id="clear">Clear data</button>
+
+    <div id="status">Ready</div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Lead Collector",
+  "version": "1.0.0",
+  "description": "Collect visible LinkedIn people search results and export CSV.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "action": {
+    "default_popup": "popup2.html"
+  }
+}
