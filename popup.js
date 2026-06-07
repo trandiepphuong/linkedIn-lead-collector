@@ -174,7 +174,6 @@ function deduplicateByProfileUrl(leads) {
 function convertToCSV(data) {
   const headers = [
     "name",
-    "connectionDegree",
     "title",
     "location",
     "profileUrl",
@@ -196,7 +195,7 @@ function escapeCSV(value) {
 }
 
 function downloadCSV(csv, filename) {
-  const blob = new Blob([csv], {
+  const blob = new Blob(["\uFEFF" + csv], {
     type: "text/csv;charset=utf-8;",
   });
 
