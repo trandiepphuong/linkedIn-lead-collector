@@ -236,6 +236,13 @@ function scrapeLinkedInPeople() {
       .trim();
   }
 
+  function cleanName(text) {
+    return cleanText(text)
+      .replace(/\s*•\s*(1st|2nd|3rd\+?)\s*/gi, "")
+      .replace(/\s*Premium\s*/gi, "")
+      .trim();
+  }
+
   function dedupeInsidePage(leads) {
     const map = new Map();
 
@@ -248,63 +255,57 @@ function scrapeLinkedInPeople() {
     return Array.from(map.values());
   }
 
+  function isIgnoredLine(line) {
+    const ignoredExact = [
+      "View",
+      "Connect",
+      "Message",
+      "Follow",
+      "Premium",
+      "Visit my website",
+    ];
+
+    return (
+      !line ||
+      ignoredExact.includes(line) ||
+      line.includes("mutual connection") ||
+      line.includes("followers") ||
+      line.startsWith("Past:") ||
+      line.startsWith("Current:") ||
+      line.includes("Easily find people") ||
+      line.includes("Search more efficiently") ||
+      line.includes("Try Premium")
+    );
+  }
+
   const url = new URL(window.location.href);
   const listItems = Array.from(document.querySelectorAll('[role="listitem"]'));
 
   const leads = listItems
     .map((item) => {
-      const profileLink =
-        item.querySelector('a[href*="/in/"]') || item.querySelector("a");
+      const realProfileLink = item.querySelector('a[href*="/in/"]');
+      const profileUrl = realProfileLink
+        ? realProfileLink.href.split("?")[0]
+        : "";
 
-      if (!profileLink) return null;
+      const lines = item.innerText
+        .split("\n")
+        .map(cleanText)
+        .filter((line) => !isIgnoredLine(line));
 
-      const rawProfileUrl = profileLink.href?.split("?")[0] || "";
-      const hasRealProfileUrl = rawProfileUrl.includes("linkedin.com/in/");
+      if (!lines.length) return null;
 
-      const allTexts = Array.from(item.querySelectorAll("p, div, span, a"))
-        .map((el) => cleanText(el.innerText))
-        .filter(Boolean);
+      const name = cleanName(lines[0]);
+      const title = lines[1] || "";
+      const location = lines[2] || "";
 
-      const uniqueTexts = [...new Set(allTexts)];
-
-      const ignoredTexts = [
-        "View",
-        "Connect",
-        "Message",
-        "Follow",
-        "Premium",
-        "Visit my website",
-      ];
-
-      const usefulTexts = uniqueTexts.filter((text) => {
-        return (
-          text &&
-          !ignoredTexts.includes(text) &&
-          !text.includes("mutual connection") &&
-          !text.includes("followers") &&
-          !text.match(/^•/)
-        );
-      });
-
-      const name = hasRealProfileUrl
-        ? cleanText(profileLink.innerText)
-            .replace("Premium", "")
-            .replace("• 1st", "")
-            .replace("• 2nd", "")
-            .replace("• 3rd+", "")
-            .trim()
-        : usefulTexts[0] || "";
-
-      if (!name) return null;
-
-      const nameIndex = usefulTexts.findIndex((text) => text.includes(name));
-      const afterNameTexts = usefulTexts.slice(nameIndex + 1);
+      if (!name || !title) return null;
 
       return {
         name,
-        title: afterNameTexts[0] || "",
-        location: afterNameTexts[1] || "",
-        profileUrl: hasRealProfileUrl ? rawProfileUrl : "",
+        title,
+        location,
+        profileUrl,
         page: url.searchParams.get("page") || "1",
         keyword: url.searchParams.get("keywords") || "",
         collectedAt: new Date().toISOString(),

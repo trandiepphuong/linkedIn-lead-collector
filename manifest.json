@@ -6,6 +6,6 @@
   "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["https://www.linkedin.com/*"],
   "action": {
-    "default_popup": "popup2.html"
+    "default_popup": "popup.html"
   }
 }
