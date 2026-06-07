@@ -236,10 +236,30 @@ function scrapeLinkedInPeople() {
       .trim();
   }
 
+  function degreeRegex() {
+    return /(1st|2nd|3rd\+|Cấp\s*1\+?|Cấp\s*2\+?|Cấp\s*3\+?)/i;
+  }
+
+  function extractConnectionDegree(text) {
+    const match = cleanText(text).match(degreeRegex());
+    return match ? cleanText(match[1]) : "";
+  }
+
   function cleanName(text) {
     return cleanText(text)
-      .replace(/\s*•\s*(1st|2nd|3rd\+?)\s*/gi, "")
-      .replace(/\s*Premium\s*/gi, "")
+      .replace(/[•·]?\s*(1st|2nd|3rd\+|Cấp\s*1\+?|Cấp\s*2\+?|Cấp\s*3\+?)\s*/gi, "")
+      .replace(/Verified/gi, "")
+      .replace(/Premium/gi, "")
+      .replace(/[•·]/g, "")
+      .trim();
+  }
+
+  function cleanField(text) {
+    return cleanText(text)
+      .replace(/^Current:\s*/i, "")
+      .replace(/^Past:\s*/i, "")
+      .replace(/^Hiện tại:\s*/i, "")
+      .replace(/^Trước đây:\s*/i, "")
       .trim();
   }
 
@@ -248,34 +268,13 @@ function scrapeLinkedInPeople() {
 
     leads.forEach((lead) => {
       const key =
-        lead.profileUrl || `${lead.name}-${lead.title}-${lead.location}`;
+        lead.profileUrl ||
+        `${lead.name}-${lead.connectionDegree}-${lead.title}-${lead.location}`;
+
       map.set(key, lead);
     });
 
     return Array.from(map.values());
-  }
-
-  function isIgnoredLine(line) {
-    const ignoredExact = [
-      "View",
-      "Connect",
-      "Message",
-      "Follow",
-      "Premium",
-      "Visit my website",
-    ];
-
-    return (
-      !line ||
-      ignoredExact.includes(line) ||
-      line.includes("mutual connection") ||
-      line.includes("followers") ||
-      line.startsWith("Past:") ||
-      line.startsWith("Current:") ||
-      line.includes("Easily find people") ||
-      line.includes("Search more efficiently") ||
-      line.includes("Try Premium")
-    );
   }
 
   const url = new URL(window.location.href);
@@ -283,26 +282,56 @@ function scrapeLinkedInPeople() {
 
   const leads = listItems
     .map((item) => {
-      const realProfileLink = item.querySelector('a[href*="/in/"]');
-      const profileUrl = realProfileLink
-        ? realProfileLink.href.split("?")[0]
+      const profileLinks = Array.from(item.querySelectorAll('a[href*="/in/"]'));
+
+      const nameProfileLink = profileLinks.find((link) =>
+        Boolean(link.closest("p"))
+      );
+
+      const fallbackProfileLink = profileLinks[0];
+
+      const profileUrl = fallbackProfileLink
+        ? fallbackProfileLink.href.split("?")[0]
         : "";
 
-      const lines = item.innerText
-        .split("\n")
-        .map(cleanText)
-        .filter((line) => !isIgnoredLine(line));
+      let nameP = nameProfileLink?.closest("p");
 
-      if (!lines.length) return null;
+      if (!nameP) {
+        nameP = Array.from(item.querySelectorAll("p")).find((p) => {
+          const text = cleanText(p.innerText);
+          return text === "LinkedIn Member" || text === "Thành viên LinkedIn";
+        });
+      }
 
-      const name = cleanName(lines[0]);
-      const title = lines[1] || "";
-      const location = lines[2] || "";
+      if (!nameP) return null;
+
+      const rawName = nameProfileLink
+        ? nameProfileLink.innerText
+        : nameP.innerText;
+
+      const name = cleanName(rawName);
+      const connectionDegree = extractConnectionDegree(nameP.innerText);
+
+      const infoContainer = nameP.parentElement;
+      if (!infoContainer) return null;
+
+      const siblings = Array.from(infoContainer.children);
+      const nameIndex = siblings.indexOf(nameP);
+
+      const infoBlocks = siblings
+        .slice(nameIndex + 1)
+        .filter((el) => el.tagName === "DIV")
+        .map((el) => cleanField(el.innerText))
+        .filter(Boolean);
+
+      const title = infoBlocks[0] || "";
+      const location = infoBlocks[1] || "";
 
       if (!name || !title) return null;
 
       return {
         name,
+        connectionDegree,
         title,
         location,
         profileUrl,

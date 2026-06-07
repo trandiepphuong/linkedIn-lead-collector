@@ -51,33 +51,32 @@ function scrapeLinkedInPeople() {
       .trim();
   }
 
-  function extractConnectionDegree(text) {
-    const match = cleanText(text).match(/(1st|2nd|3rd\+?)/i);
-    return match ? match[1] : "";
+  function degreeRegex() {
+    return /(1st|2nd|3rd\+|Cấp\s*1\+?|Cấp\s*2\+?|Cấp\s*3\+?)/i;
   }
 
-function isDegreeLine(text) {
-  const cleaned = cleanText(text)
-    .replace(/[•·]/g, "")
-    .replace(/\s+/g, "")
-    .trim();
+  function extractConnectionDegree(text) {
+    const match = cleanText(text).match(degreeRegex());
+    return match ? cleanText(match[1]) : "";
+  }
 
-  return /^(1st|2nd|3rd\+?)$/i.test(cleaned);
-}
+  function cleanName(text) {
+    return cleanText(text)
+      .replace(/[•·]?\s*(1st|2nd|3rd\+|Cấp\s*1\+?|Cấp\s*2\+?|Cấp\s*3\+?)\s*/gi, "")
+      .replace(/Verified/gi, "")
+      .replace(/Premium/gi, "")
+      .replace(/[•·]/g, "")
+      .trim();
+  }
 
-function removeDegreeFromLine(text) {
-  return cleanText(text)
-    .replace(/[•·]\s*(1st|2nd|3rd\+?)/gi, "")
-    .replace(/\b(1st|2nd|3rd\+?)\b/gi, "")
-    .replace(/[•·]/g, "")
-    .trim();
-}
-
-function cleanName(text) {
-  return removeDegreeFromLine(text)
-    .replace(/\s*Premium\s*/gi, "")
-    .trim();
-}
+  function cleanField(text) {
+    return cleanText(text)
+      .replace(/^Current:\s*/i, "")
+      .replace(/^Past:\s*/i, "")
+      .replace(/^Hiện tại:\s*/i, "")
+      .replace(/^Trước đây:\s*/i, "")
+      .trim();
+  }
 
   function dedupeInsidePage(leads) {
     const map = new Map();
@@ -93,64 +92,55 @@ function cleanName(text) {
     return Array.from(map.values());
   }
 
-  function isIgnoredLine(line) {
-    const ignoredExact = [
-      "View",
-      "Connect",
-      "Message",
-      "Follow",
-      "Premium",
-      "Visit my website",
-      "View my blog",
-    ];
-
-    return (
-      !line ||
-      ignoredExact.includes(line) ||
-      line.includes("mutual connection") ||
-      line.includes("followers") ||
-      line.startsWith("Past:") ||
-      line.startsWith("Current:") ||
-      line.includes("Easily find people") ||
-      line.includes("Search more efficiently") ||
-      line.includes("Try Premium")
-    );
-  }
-
   const url = new URL(window.location.href);
   const listItems = Array.from(document.querySelectorAll('[role="listitem"]'));
 
   const leads = listItems
     .map((item) => {
-      const realProfileLink = item.querySelector('a[href*="/in/"]');
+      const profileLinks = Array.from(item.querySelectorAll('a[href*="/in/"]'));
 
-      const profileUrl = realProfileLink
-        ? realProfileLink.href.split("?")[0]
+      const nameProfileLink = profileLinks.find((link) =>
+        Boolean(link.closest("p"))
+      );
+
+      const fallbackProfileLink = profileLinks[0];
+
+      const profileUrl = fallbackProfileLink
+        ? fallbackProfileLink.href.split("?")[0]
         : "";
 
-      let lines = item.innerText
-        .split("\n")
-        .map(cleanText)
-        .filter((line) => !isIgnoredLine(line));
+      let nameP = nameProfileLink?.closest("p");
 
-      if (!lines.length) return null;
+      if (!nameP) {
+        nameP = Array.from(item.querySelectorAll("p")).find((p) => {
+          const text = cleanText(p.innerText);
+          return text === "LinkedIn Member" || text === "Thành viên LinkedIn";
+        });
+      }
 
-      const rawName = lines[0];
+      if (!nameP) return null;
 
-const connectionDegree =
-  extractConnectionDegree(rawName) ||
-  lines.map(extractConnectionDegree).find(Boolean) ||
-  "";
+      const rawName = nameProfileLink
+        ? nameProfileLink.innerText
+        : nameP.innerText;
 
-const name = cleanName(rawName);
+      const name = cleanName(rawName);
+      const connectionDegree = extractConnectionDegree(nameP.innerText);
 
-const contentLines = lines
-  .slice(1)
-  .map(removeDegreeFromLine)
-  .filter((line) => line && !isDegreeLine(line));
+      const infoContainer = nameP.parentElement;
+      if (!infoContainer) return null;
 
-const title = contentLines[0] || "";
-const location = contentLines[1] || "";
+      const siblings = Array.from(infoContainer.children);
+      const nameIndex = siblings.indexOf(nameP);
+
+      const infoBlocks = siblings
+        .slice(nameIndex + 1)
+        .filter((el) => el.tagName === "DIV")
+        .map((el) => cleanField(el.innerText))
+        .filter(Boolean);
+
+      const title = infoBlocks[0] || "";
+      const location = infoBlocks[1] || "";
 
       if (!name || !title) return null;
 
